@@ -102,7 +102,7 @@ def plot_fairness_metrics(predictions: dict, unbiased_values: pd.Series, group: 
     fig, axes = plt.subplots(1, 2)
 
     impacts = calculate_disparate_impacts(predictions, group)
-    plot_biases(impacts, ax=axes[0], title='Disparate impacts')
+    plot_biases(impacts, ax=axes[0], title='Disparate impact')
     
     treatments = calculate_disparate_treatments(predictions, unbiased_values, group)
     plot_biases(treatments, ax=axes[1], title='Disparate treatment')
