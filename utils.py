@@ -20,12 +20,13 @@ def coefs_to_series(lr, names) -> pd.Series:
     names = names + ['Intercept']
     values = lr.coef_.tolist() + [lr.intercept_]
     
-    return pd.Series({n: coef for n, coef in zip(names, values)})
+    return pd.Series(dict(zip(names, values)))
 
 def calculate_difference_with_uncertainty(df: pd.DataFrame) -> dict:
     '''Calculate mean and sem of difference between two groups
     
-    df: A pandas dataframe that has two rows and two columns (mean and sem), so we can calculate the difference of the means and the sem of the difference
+    df: A pandas dataframe that has two rows and two columns (mean and sem),
+    so we can calculate the difference of the means and the sem of the difference
     ''' 
     assert len(df) == 2, 'Can only calculate difference between 2 groups'
     diff_mean = df.loc[0, 'mean'] - df.loc[1, 'mean']
