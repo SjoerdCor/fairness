@@ -30,13 +30,15 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             self.impute_values = [X.iloc[:, i].mean() for i in self.ignored_cols]
         
         y_pred = self.predict(X, use_correction=False)
+        if self.correction_strategy == 'No':
+            self.overprediction_ = None
         if self.correction_strategy == "Additive":
             self.overprediction_ =  y_pred.mean() - y.mean()
         elif self.correction_strategy == 'Multiplicative':
             self.overprediction_ = y_pred.mean() / y.mean()
         elif self.correction_strategy == 'Logitadditive':
             self.overprediction_= scipy.special.logit(y_pred.mean()) - scipy.special.logit(y.mean())
-        elif self.correction_strategy != 'No':
+        else:
             raise ValueError(f'Correction strategy must be in ["No", "Additive", "Multiplicative", "Logitadditive"], not {self.correction_strategy}')
 
     def _prepare_new_dataset(self, X):
@@ -55,13 +57,15 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         """
         Correct predictions by subtracting or dividing the overprediction on the trainset
         """
+        if prediction == 'No':
+            pass
         if self.correction_strategy == "Additive":
             predictions -= self.overprediction_ 
         elif self.correction_strategy == 'Multiplicative':
             predictions /= self.overprediction_
         elif self.correction_strategy == 'Logitadditive':
             predictions = scipy.special.expit(scipy.special.logit(predictions) - self.overprediction_)
-        elif self.correction_strategy != 'No':
+        else
             raise ValueError(f'Correction strategy must be in ["No", "Additive", Multiplicative", "Logitadditive"], not {self.correction_strategy}')
         return predictions
     
