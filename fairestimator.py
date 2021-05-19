@@ -35,7 +35,7 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         elif self.correction_strategy == 'Multiplicative':
             self.overprediction_ = y_pred.mean() / y.mean()
         elif self.correction_strategy == 'Logitadditive':
-            self.overprediction_= scipy.special.logit(y_pred).mean() - scipy.special.logit(y).mean()
+            self.overprediction_= scipy.special.logit(y_pred.mean()) - scipy.special.logit(y.mean())
         elif self.correction_strategy != 'No':
             raise ValueError(f'Correction strategy must be in ["No", "Additive", "Multiplicative", "Logitadditive"], not {self.correction_strategy}')
 
@@ -45,7 +45,9 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         """
         X_new = X.copy()
         ignored_cols = self.ignored_cols or []
-        for i, v in zip(self.ignored_cols, self.impute_values):
+        if len(ignored_cols) != len(self.impute_values):
+            raise ValueError('self.ignored_cols and self.impute_values must be of same length.')
+        for i, v in zip(ignored_cols, self.impute_values):
             X_new.iloc[:, i] = v
         return X_new
 
@@ -68,10 +70,10 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
     def predict(self, X, y=None, use_correction=True):
         """ Predict new instances."""
         if self.correction_strategy == 'Logitadditive':
-            
             msg = f'Correction strategy is {self.correction_strategy}, which is only meant for classifiers. '
             msg += 'Consider switching to "Additive" or "Multiplicative".'
             warnings.warn(msg)
+        
         X_new = self._prepare_new_dataset(X)
         y_pred = self.estimator.predict(X_new)
         
