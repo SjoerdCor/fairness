@@ -19,19 +19,10 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         self.ignored_cols = ignored_cols
         self.impute_values = impute_values
         self.correction_strategy = correction_strategy
-
-    def fit(self, X, y=None):
-        """
-        Fit estimator and learn how to correct for biases in two ways.
-
-        Learns which values to compute for each column that should be hidden if necessary.
-        Calculates the amount of overprediction due to the fact that we impute values.
-        """
-        self.estimator.fit(X, y)
-        if self.impute_values is None:
-            self.impute_values = [X.iloc[:, i].mean() for i in self.ignored_cols]
-
-        y_pred = self.predict(X, use_correction=False)
+        self.overprediction_ = None
+        
+    def _calculate_overprediction(self, X, y):
+        y_pred = self._calculate_uncorrected_predictions(X)
         if self.correction_strategy == 'No':
             self.overprediction_ = None
         elif self.correction_strategy == "Additive":
@@ -44,6 +35,21 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             msg = 'Correction strategy must be in ["No", "Additive", Multiplicative", "Logitadditive"]'
             msg += f'not {self.correction_strategy}'
             raise ValueError(msg)
+        
+
+        
+    def fit(self, X, y=None):
+        """
+        Fit estimator and learn how to correct for biases in two ways.
+
+        Learns which values to compute for each column that should be hidden if necessary.
+        Calculates the amount of overprediction due to the fact that we impute values.
+        """
+        self.estimator.fit(X, y)
+        if self.impute_values is None:
+            self.impute_values = [X.iloc[:, i].mean() for i in self.ignored_cols]
+
+        self._calculate_overprediction(X, y)
 
     def _prepare_new_dataset(self, X):
         """
@@ -77,9 +83,12 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
 class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
+    def _calculate_uncorrected_predictions(self, X):
+        return self.predict(X, use_correction=False)
+
     def predict(self, X, y=None, use_correction=True):
         """ Predict new instances."""
-        if self.correction_strategy == 'Logitadditive':
+        if use_correction and self.correction_strategy == 'Logitadditive':
             msg = f'Correction strategy is {self.correction_strategy}, which is only meant for classifiers. '
             msg += 'Consider switching to "Additive" or "Multiplicative".'
             warnings.warn(msg)
@@ -92,6 +101,9 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         return y_pred
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
+    def _calculate_uncorrected_predictions(self, X):
+        return self.predict_proba(X, use_correction=False)[:, 1]
+
     def predict(self, X, y=None, use_correction=True):
         """Predict new instances."""
 
@@ -101,7 +113,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
     def predict_proba(self, X, y=None, use_correction=True):
         """Predict probability for new instances."""
 
-        if self.correction_strategy in ["Additive", "Multiplicative"]:
+        if use_correction and self.correction_strategy in ["Additive", "Multiplicative"]:
             msg = f'Correction strategy is {self.correction_strategy}. '
             msg += 'This may lead to probabilities smaller than 0 or larger than 1. '
             msg += 'Consider switching to "Logitadditive"'
