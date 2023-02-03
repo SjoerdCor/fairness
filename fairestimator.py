@@ -76,7 +76,7 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         """
         Impute values for sensitive attributes
         """
-        X_new = np.array(X)
+        X_new = np.array(X, dtype=np.float64)
         if len(self.ignored_cols_) != len(self.impute_values_):
             raise ValueError(
                 "self.ignored_cols and self.impute_values must be of same length."
