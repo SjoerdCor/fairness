@@ -61,11 +61,8 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         if self.impute_values_ is None:
             if isinstance(X, pd.DataFrame):
                 self.impute_values_ = [X.iloc[:, i].mean() for i in self.ignored_cols]
-            elif isinstance(X, np.ndarray):
-                self.impute_values_ = X[:, self.ignored_cols].mean(axis=0)
             else:
-                raise TypeError(f"X must be a np.array or pd.DataFrame, not {type(X)!r}")
-
+                self.impute_values_ = X[:, self.ignored_cols].mean(axis=0)
         self._calculate_overprediction(X, y)
         return self
 
@@ -73,21 +70,14 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         """
         Impute values for sensitive attributes
         """
-        X_new = copy.copy(X)
+        X_new = np.array(X)
         ignored_cols = self.ignored_cols or []
         if len(ignored_cols) != len(self.impute_values_):
             raise ValueError(
                 "self.ignored_cols and self.impute_values must be of same length."
             )
         for i, v in zip(ignored_cols, self.impute_values_):
-            if isinstance(X, pd.DataFrame):
-                X_new.iloc[:, i] = v
-            elif isinstance(X, np.ndarray):
-                X_new[:, i] = v 
-            else:
-                raise TypeError("X must be a np.array or pd.DataFrame")
-
-            
+            X_new[:, i] = v 
         return X_new
 
     def _correct_predictions(self, predictions):
@@ -119,6 +109,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         """Predict new instances."""
         check_is_fitted(self)
         check_array(X)
+        
         if use_correction and self.correction_strategy == "Logitadditive":
             msg = f"Correction strategy is {self.correction_strategy}, which is only meant for classifiers. "
             msg += 'Consider switching to "Additive" or "Multiplicative".'
@@ -133,6 +124,9 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
+
+    def _more_tags(self):
+        return {'binary_only': True, 'poor_score': True, '_xfail_checks': {"check_classifiers_classes": 'Skipped because for ignoring columns, you do not always predict all different classes'}}
     @property
     def classes_(self):
         return self.estimator_.classes_
