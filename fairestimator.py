@@ -28,6 +28,10 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         self.impute_values = impute_values
         self.correction_strategy = correction_strategy
 
+    @property
+    def n_features_in_(self):
+        return self.estimator_.n_features_in_
+
     def _calculate_overprediction(self, X, y):
         y_pred = self._calculate_uncorrected_predictions(X)
         if self.correction_strategy == "No":
@@ -56,7 +60,6 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
         self.ignored_cols_ = copy.copy(self.ignored_cols)
         self.ignored_cols_ = self.ignored_cols_ or []
-        self.n_features_in_ = X.shape[1]
 
         self.estimator_ = clone(self.estimator)
         self.estimator_.fit(X, y)
