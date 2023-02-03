@@ -10,6 +10,7 @@ import pandas as pd
 
 class BaseIgnoringBiasEstimator(BaseEstimator):
     _required_parameters = ["estimator"]
+
     def __init__(
         self, estimator, ignored_cols=None, impute_values=None, correction_strategy="No"
     ):
@@ -50,9 +51,11 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
         Learns which values to compute for each column that should be hidden if necessary.
         Calculates the amount of overprediction due to the fact that we impute values.
-        """ 
+        """
         X, y = check_X_y(X, y)
 
+        self.ignored_cols_ = copy.copy(self.ignored_cols)
+        self.ignored_cols_ = self.ignored_cols_ or []
         self.n_features_in_ = X.shape[1]
 
         self.estimator_ = clone(self.estimator)
@@ -60,9 +63,9 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         self.impute_values_ = copy.copy(self.impute_values)
         if self.impute_values_ is None:
             if isinstance(X, pd.DataFrame):
-                self.impute_values_ = [X.iloc[:, i].mean() for i in self.ignored_cols]
+                self.impute_values_ = [X.iloc[:, i].mean() for i in self.ignored_cols_]
             else:
-                self.impute_values_ = X[:, self.ignored_cols].mean(axis=0)
+                self.impute_values_ = X[:, self.ignored_cols_].mean(axis=0)
         self._calculate_overprediction(X, y)
         return self
 
@@ -71,13 +74,12 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         Impute values for sensitive attributes
         """
         X_new = np.array(X)
-        ignored_cols = self.ignored_cols or []
-        if len(ignored_cols) != len(self.impute_values_):
+        if len(self.ignored_cols_) != len(self.impute_values_):
             raise ValueError(
                 "self.ignored_cols and self.impute_values must be of same length."
             )
-        for i, v in zip(ignored_cols, self.impute_values_):
-            X_new[:, i] = v 
+        for i, v in zip(self.ignored_cols_, self.impute_values_):
+            X_new[:, i] = v
         return X_new
 
     def _correct_predictions(self, predictions):
@@ -109,7 +111,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         """Predict new instances."""
         check_is_fitted(self)
         check_array(X)
-        
+
         if use_correction and self.correction_strategy == "Logitadditive":
             msg = f"Correction strategy is {self.correction_strategy}, which is only meant for classifiers. "
             msg += 'Consider switching to "Additive" or "Multiplicative".'
@@ -124,9 +126,15 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
-
     def _more_tags(self):
-        return {'binary_only': True, 'poor_score': True, '_xfail_checks': {"check_classifiers_classes": 'Skipped because for ignoring columns, you do not always predict all different classes'}}
+        return {
+            "binary_only": True,
+            "poor_score": True,
+            "_xfail_checks": {
+                "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
+            },
+        }
+
     @property
     def classes_(self):
         return self.estimator_.classes_
