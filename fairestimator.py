@@ -1,11 +1,15 @@
 import warnings
+import copy
 
-from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
+from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
+from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 import scipy.special
 import numpy as np
+import pandas as pd
 
 
 class BaseIgnoringBiasEstimator(BaseEstimator):
+    _required_parameters = ["estimator"]
     def __init__(
         self, estimator, ignored_cols=None, impute_values=None, correction_strategy="No"
     ):
@@ -22,7 +26,6 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         self.ignored_cols = ignored_cols
         self.impute_values = impute_values
         self.correction_strategy = correction_strategy
-        self.overprediction_ = None
 
     def _calculate_overprediction(self, X, y):
         y_pred = self._calculate_uncorrected_predictions(X)
@@ -47,25 +50,44 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
         Learns which values to compute for each column that should be hidden if necessary.
         Calculates the amount of overprediction due to the fact that we impute values.
-        """
-        self.estimator.fit(X, y)
-        if self.impute_values is None:
-            self.impute_values = [X.iloc[:, i].mean() for i in self.ignored_cols]
+        """ 
+        X, y = check_X_y(X, y)
+
+        self.n_features_in_ = X.shape[1]
+
+        self.estimator_ = clone(self.estimator)
+        self.estimator_.fit(X, y)
+        self.impute_values_ = copy.copy(self.impute_values)
+        if self.impute_values_ is None:
+            if isinstance(X, pd.DataFrame):
+                self.impute_values_ = [X.iloc[:, i].mean() for i in self.ignored_cols]
+            elif isinstance(X, np.ndarray):
+                self.impute_values_ = X[:, self.ignored_cols].mean(axis=0)
+            else:
+                raise TypeError(f"X must be a np.array or pd.DataFrame, not {type(X)!r}")
 
         self._calculate_overprediction(X, y)
+        return self
 
     def _prepare_new_dataset(self, X):
         """
         Impute values for sensitive attributes
         """
-        X_new = X.copy()
+        X_new = copy.copy(X)
         ignored_cols = self.ignored_cols or []
-        if len(ignored_cols) != len(self.impute_values):
+        if len(ignored_cols) != len(self.impute_values_):
             raise ValueError(
                 "self.ignored_cols and self.impute_values must be of same length."
             )
-        for i, v in zip(ignored_cols, self.impute_values):
-            X_new.iloc[:, i] = v
+        for i, v in zip(ignored_cols, self.impute_values_):
+            if isinstance(X, pd.DataFrame):
+                X_new.iloc[:, i] = v
+            elif isinstance(X, np.ndarray):
+                X_new[:, i] = v 
+            else:
+                raise TypeError("X must be a np.array or pd.DataFrame")
+
+            
         return X_new
 
     def _correct_predictions(self, predictions):
@@ -95,13 +117,15 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
     def predict(self, X, y=None, use_correction=True):
         """Predict new instances."""
+        check_is_fitted(self)
+        check_array(X)
         if use_correction and self.correction_strategy == "Logitadditive":
             msg = f"Correction strategy is {self.correction_strategy}, which is only meant for classifiers. "
             msg += 'Consider switching to "Additive" or "Multiplicative".'
             warnings.warn(msg)
 
         X_new = self._prepare_new_dataset(X)
-        y_pred = self.estimator.predict(X_new)
+        y_pred = self.estimator_.predict(X_new)
 
         if use_correction:
             y_pred = self._correct_predictions(y_pred)
@@ -109,17 +133,23 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
+    @property
+    def classes_(self):
+        return self.estimator_.classes_
+
     def _calculate_uncorrected_predictions(self, X):
-        return self.predict_proba(X, use_correction=False)[:, 1]
+        # This is really ugly, and should be solved (also to handle multi-output)
+        return self.predict_proba(X, use_correction=False)[:, -1]
 
     def predict(self, X, y=None, use_correction=True):
         """Predict new instances."""
-
         y_proba = self.predict_proba(X, y, use_correction)
-        return np.argmax(y_proba, axis=1)
+        return self.classes_[np.argmax(y_proba, axis=1)]
 
     def predict_proba(self, X, y=None, use_correction=True):
         """Predict probability for new instances."""
+        check_is_fitted(self)
+        check_array(X)
 
         if use_correction and self.correction_strategy in [
             "Additive",
@@ -131,7 +161,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
             warnings.warn(msg)
 
         X_new = self._prepare_new_dataset(X)
-        y_pred_proba = self.estimator.predict_proba(X_new)
+        y_pred_proba = self.estimator_.predict_proba(X_new)
         if use_correction:
             y_pred_proba = self._correct_predictions(y_pred_proba)
 
