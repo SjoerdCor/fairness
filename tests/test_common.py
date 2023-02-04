@@ -21,6 +21,12 @@ regressor = RandomForestRegressor(min_samples_leaf=10, max_depth=3, random_state
         fairestimator.IgnoringBiasRegressor(skclone(regressor)),
         fairestimator.IgnoringBiasRegressor(skclone(regressor), [0], impute_values=[1]),
     ],
+    ids=[
+        "EmptyClassifier",
+        "IgnoringClassifier",
+        "EmptyRegressor",
+        "IgnoringRegressor",
+    ],
 )
 def test_all_estimators(estimator):
     return check_estimator(estimator)
