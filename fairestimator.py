@@ -42,8 +42,8 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             self.overprediction_ = y_pred.mean() / y.mean()
         elif self.correction_strategy == "Logitadditive":
             self.overprediction_ = scipy.special.logit(
-                y_pred.mean()
-            ) - scipy.special.logit(y.mean())
+                y_pred.mean(axis=0)
+            ) - scipy.special.logit(y.mean(axis=0))
         else:
             msg = 'Correction strategy must be in ["No", "Additive", Multiplicative", "Logitadditive"]'
             msg += f"not {self.correction_strategy}"
@@ -143,8 +143,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         return self.estimator_.classes_
 
     def _calculate_uncorrected_predictions(self, X):
-        # This is really ugly, and should be solved (also to handle multi-output)
-        return self.predict_proba(X, use_correction=False)[:, -1]
+        return self.predict_proba(X, use_correction=False)
 
     def predict(self, X, y=None, use_correction=True):
         """Predict new instances."""

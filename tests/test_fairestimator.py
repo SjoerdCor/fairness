@@ -200,8 +200,9 @@ def test_calculate_correct_overprediction_classification():
     lr.fit(X, y)
     # predict at imputed value and get probability of positive class
     prediction = lr.predict_proba([[1]])[0, 1]
-    assert ib.overprediction_ == scipy.special.logit(
-        prediction
+    assert np.array_equal(
+        ib.overprediction_,
+        [-scipy.special.logit(prediction), scipy.special.logit(prediction)],
     )  # logit(0.5) = 0; 0.5 is avg prediction
 
 
@@ -233,15 +234,14 @@ def test_use_logitadditive_correction_strategy_correctly():
         correction_strategy="Logitadditive",
     )
     ib.fit(X, y)
-    ib.overprediction_ = 1e9
+    ib.overprediction_ = np.array([-1e9, 1e9])
 
     assert np.array_equal(ib.predict([[-100], [100]]), [0, 0])
 
-    ib.overprediction_ = -1e9
+    ib.overprediction_ = np.array([1e9, -1e9])
     assert np.array_equal(ib.predict([[-100], [100]]), [1, 1])
 
 
-# Test that overprediction is used correctly
 # Test that correct error is thrown for not existing correction_strategy
 
 
