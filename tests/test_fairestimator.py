@@ -20,7 +20,7 @@ importlib.reload(fairestimator)
 clf = RandomForestClassifier(min_samples_leaf=1, max_depth=3, random_state=42)
 regressor = RandomForestRegressor(min_samples_leaf=1, max_depth=3, random_state=42)
 
-# TODO: write docstrings for each test
+
 def data(as_dataframe=False):
     """Simple sample data for many tests
 

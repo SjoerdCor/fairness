@@ -6,6 +6,7 @@ from sklearn.utils.estimator_checks import check_estimator
 from sklearn.base import clone as skclone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
+sys.path.append(r"..\..")
 sys.path.append("..")
 from fairness import fairestimator
 
