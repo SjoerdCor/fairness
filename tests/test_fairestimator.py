@@ -242,10 +242,27 @@ def test_use_logitadditive_correction_strategy_correctly():
     assert np.array_equal(ib.predict([[-100], [100]]), [1, 1])
 
 
-# Test that correct error is thrown for not existing correction_strategy
+def test_error_nonexistent_correction_strategy():
+    X, y = load_iris(return_X_y=True)
+    ib = fairestimator.IgnoringBiasClassifier(clf, correction_strategy="DoesNotExist")
+    with pytest.raises(ValueError):
+        ib.fit(X, y)
 
 
-# Add test so that an error is thrown if ignored_cols does not match impute_values
-# Add test so that an error is thrown if ignored_cols has an index not in X
+def test_error_unequal_length_impute_ignored_cols():
+    X, y = load_iris(return_X_y=True)
+    ib = fairestimator.IgnoringBiasClassifier(
+        clf, ignored_cols=[0, 1], impute_values=[1]
+    )
+    with pytest.raises(ValueError):
+        ib.fit(X, y)
+
+
+def test_error_too_high_index_ignored_col():
+    X, y = load_iris(return_X_y=True)
+    ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=[1000])
+    with pytest.raises(IndexError):
+        ib.fit(X, y)
+
+
 # Add test so that an error is thrown when the base_estimator does not match with the type of the IgnoringBiasEstimator
-# Add test that predict_proba always adds to 1
