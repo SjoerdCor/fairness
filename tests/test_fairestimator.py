@@ -7,7 +7,7 @@ import scipy.special
 
 from sklearn.base import clone as skclone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.datasets import load_iris, load_diabetes
 
 sys.path.append(r"..\..")
@@ -188,7 +188,23 @@ def test_calculate_correct_overprediction_regression(correction_strategy, expect
     assert ib.overprediction_ == expected
 
 
-# Test that overprediction_ is calculated correctly
+def test_calculate_correct_overprediction_classification():
+    X = [[0], [1]]
+    y = [0, 1]
+    lr = LogisticRegression(penalty=None)
+    ib = fairestimator.IgnoringBiasClassifier(
+        lr, ignored_cols=[0], impute_values=[1], correction_strategy="Logitadditive"
+    )
+    ib.fit(X, y)
+
+    lr.fit(X, y)
+    # predict at imputed value and get probability of positive class
+    prediction = lr.predict_proba([[1]])[0, 1]
+    assert ib.overprediction_ == scipy.special.logit(
+        prediction
+    )  # logit(0.5) = 0; 0.5 is avg prediction
+
+
 # Test that overprediction is used correctly
 # Test that correct error is thrown for not existing correction_strategy
 
@@ -196,3 +212,4 @@ def test_calculate_correct_overprediction_regression(correction_strategy, expect
 # Add test so that an error is thrown if ignored_cols does not match impute_values
 # Add test so that an error is thrown if ignored_cols has an index not in X
 # Add test so that an error is thrown when the base_estimator does not match with the type of the IgnoringBiasEstimator
+# Add test that predict_proba always adds to 1
