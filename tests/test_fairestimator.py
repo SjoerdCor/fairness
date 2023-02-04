@@ -3,10 +3,12 @@ import sys
 import pytest
 import numpy as np
 import pandas as pd
+import scipy.special
 
 from sklearn.base import clone as skclone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.datasets import load_iris
+from sklearn.linear_model import LinearRegression
+from sklearn.datasets import load_iris, load_diabetes
 
 sys.path.append(r"..\..")
 sys.path.append("..")
@@ -15,8 +17,8 @@ import importlib
 
 importlib.reload(fairestimator)
 
-clf = RandomForestClassifier(min_samples_leaf=10, max_depth=3, random_state=42)
-regressor = RandomForestRegressor(min_samples_leaf=10, max_depth=3, random_state=42)
+clf = RandomForestClassifier(min_samples_leaf=1, max_depth=3, random_state=42)
+regressor = RandomForestRegressor(min_samples_leaf=1, max_depth=3, random_state=42)
 
 # TODO: write docstrings for each test
 def data(as_dataframe=False):
@@ -125,9 +127,72 @@ def test_calculate_correct_mean_for_imputation(as_dataframe, ignored_cols, expec
     assert np.array_equal(result, expected)
 
 
-def test_uncorrect_predictions_regressor():
-    X, y = load_iris(return_X_y=True)
-    ir = fairestimator.IgnoringBiasRegressor(skclone(regressor), ignored_cols=None)
-    ir.fit(X, y)
-    regres = skclone(regressor).fit(X, y)
-    assert np.array_equal(ir._calculate_uncorrected_predictions(X), regres.predict(X))
+@pytest.mark.parametrize(
+    ["estimator", "datasetfunc"],
+    [
+        (
+            fairestimator.IgnoringBiasRegressor(skclone(regressor), ignored_cols=None),
+            load_diabetes,
+        ),
+        (
+            fairestimator.IgnoringBiasClassifier(skclone(clf), ignored_cols=None),
+            load_iris,
+        ),
+    ],
+    ids=["Regressor", "Classifier"],
+)
+def test_ignoring_nothing_doesnt_change_predict(estimator, datasetfunc):
+    """Test whether setting ignored_cols to None leads to the same results for
+    prediction as the underlying estimaotr
+
+
+    Parameters
+    ----------
+    estimator : subclass of IgnoringBiasBaseEstimator
+        The IgnoringBias estimator
+    datasetfunc : callable
+        An sklearn function to load the dataset
+    """
+    X, y = datasetfunc(return_X_y=True)
+    estimator.fit(X, y)
+    underlying_estimator = skclone(estimator.estimator_).fit(X, y)
+    assert np.array_equal(estimator.predict(X), underlying_estimator.predict(X))
+
+
+def test_calculate_correct_overprediction_without_strategy():
+    ib = fairestimator.IgnoringBiasClassifier(
+        skclone(clf), ignored_cols=[0], correction_strategy="No"
+    )
+    X = np.array([[0], [1], [5]])
+    y = np.array([0, 0, 1])
+    ib.fit(X, y)
+    result = ib.overprediction_
+    assert result is None
+
+
+@pytest.mark.parametrize(
+    ["correction_strategy", "expected"],
+    [("Additive", 0.5), ("Multiplicative", 2 / (3 / 2))],
+    ids=["Additive", "Multiplicative"],
+)
+def test_calculate_correct_overprediction_regression(correction_strategy, expected):
+    X = [[0], [1]]
+    y = [1, 2]
+    ib = fairestimator.IgnoringBiasRegressor(
+        LinearRegression(),
+        ignored_cols=[0],
+        impute_values=[1],
+        correction_strategy=correction_strategy,
+    )
+    ib.fit(X, y)
+    assert ib.overprediction_ == expected
+
+
+# Test that overprediction_ is calculated correctly
+# Test that overprediction is used correctly
+# Test that correct error is thrown for not existing correction_strategy
+
+
+# Add test so that an error is thrown if ignored_cols does not match impute_values
+# Add test so that an error is thrown if ignored_cols has an index not in X
+# Add test so that an error is thrown when the base_estimator does not match with the type of the IgnoringBiasEstimator
