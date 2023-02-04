@@ -110,6 +110,14 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
     def _calculate_uncorrected_predictions(self, X):
         return self.predict(X, use_correction=False)
 
+    def fit(self, *args, **kwargs):
+        if not isinstance(self.estimator, RegressorMixin):
+            raise TypeError(
+                "Base estimator must be subclass of RegressorMixin for: "
+                "IgnoringBiasRegressor. Did you mean to use IgnoringBiasClassifier?"
+            )
+        super().fit(*args, **kwargs)
+
     def predict(self, X, y=None, use_correction=True):
         """Predict new instances."""
         check_is_fitted(self)
@@ -137,6 +145,14 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
                 "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
             },
         }
+
+    def fit(self, *args, **kwargs):
+        if not isinstance(self.estimator, ClassifierMixin):
+            raise TypeError(
+                "Base estimator must be subclass of ClassifierMixin for: "
+                "IgnoringBiasClassifier. Did you mean to use IgnoringBiasRegressor?"
+            )
+        super().fit(*args, **kwargs)
 
     @property
     def classes_(self):

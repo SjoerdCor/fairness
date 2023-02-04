@@ -265,4 +265,17 @@ def test_error_too_high_index_ignored_col():
         ib.fit(X, y)
 
 
-# Add test so that an error is thrown when the base_estimator does not match with the type of the IgnoringBiasEstimator
+@pytest.mark.parametrize(
+    ["basecls", "underlyingestimator"],
+    [
+        (fairestimator.IgnoringBiasRegressor, clf),
+        (fairestimator.IgnoringBiasClassifier, regressor),
+    ],
+    ids=["IBRegressor", "IBClassifier"],
+)
+def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
+    X, y = load_iris(return_X_y=True)
+
+    ib = basecls(underlyingestimator)
+    with pytest.raises(TypeError):
+        ib.fit(X, y)
