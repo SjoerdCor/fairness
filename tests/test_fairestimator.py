@@ -205,6 +205,42 @@ def test_calculate_correct_overprediction_classification():
     )  # logit(0.5) = 0; 0.5 is avg prediction
 
 
+@pytest.mark.parametrize(
+    ["correction_strategy", "expected"],
+    [("Multiplicative", [0.5, 0.5]), ("Additive", [-1, -1])],
+)
+def test_use_regression_correction_strategy_correctly(correction_strategy, expected):
+    X = [[0], [1]]
+    y = [1, 1]
+    lr = LinearRegression()
+    ib = fairestimator.IgnoringBiasRegressor(
+        lr,
+        correction_strategy=correction_strategy,
+    )
+    ib.fit(X, y)
+    ib.overprediction_ = 2
+
+    assert np.array_equal(ib.predict(X), expected)
+
+
+def test_use_logitadditive_correction_strategy_correctly():
+    X = [[0], [1]]
+    y = [0, 1]
+    lr = LogisticRegression(penalty=None)
+    ib = fairestimator.IgnoringBiasClassifier(
+        lr,
+        ignored_cols=[0],
+        correction_strategy="Logitadditive",
+    )
+    ib.fit(X, y)
+    ib.overprediction_ = 1e9
+
+    assert np.array_equal(ib.predict([[-100], [100]]), [0, 0])
+
+    ib.overprediction_ = -1e9
+    assert np.array_equal(ib.predict([[-100], [100]]), [1, 1])
+
+
 # Test that overprediction is used correctly
 # Test that correct error is thrown for not existing correction_strategy
 
