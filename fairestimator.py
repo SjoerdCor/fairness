@@ -1,5 +1,6 @@
 import warnings
 import copy
+from typing import Iterable
 
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, clone
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
@@ -12,17 +13,36 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
     _required_parameters = ["estimator"]
 
     def __init__(
-        self, estimator, ignored_cols=None, impute_values=None, correction_strategy="No"
+        self,
+        estimator,
+        ignored_cols: Iterable[int] | None = None,
+        impute_values: Iterable | None = None,
+        correction_strategy: str = "No",
     ):
         """
-        estimator: an estimator (classifier or regressor)
-        ignored_cols: indices of cols to ignore during predicting
-        impute_values: values to use during predicting (by default calculates mean)
-                        - must be of same length as ignored_cols
-        correction_strategy: how to correct for possible overpredictions, must be in
-                            ["No", "Additive", "Multiplicative", "Logitadditive"]
+        Initialize the estimator
+
+        Parameters
+        ----------
+        estimator :
+            The base estimator
+        ignored_cols : Iterable[int] | None, optional
+            Indices of the columns which must be ignored by the estimator, by default None
+            meaning no columns are ignored
+        impute_values : Iterable | None, optional
+            None (default) means impute with mean. Iterable with values to impute
+            may be provided, must be of same length as `ignored_cols`
+        correction_strategy : str, optional
+            Imputation can lead to higher average outcomes; via this parameter, the estimator
+            can correct for that. By default "No" meaning no correction is performed.
+            Regressors allow for "Multiplicative" or "Additive" correction, meaning we
+            divide or subtract the average overprediction on the trainset for all
+            predictions.
+            CLassifiers allow for "Logitadditive" which works like additive but in a
+            transformed logit-space, so probabilities are constrained [0, 1]
 
         """
+
         self.estimator = estimator
         self.ignored_cols = ignored_cols
         self.impute_values = impute_values
@@ -30,9 +50,25 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
     @property
     def n_features_in_(self):
+        """Necessary for scikit-learn compatibility"""
         return self.estimator_.n_features_in_
 
     def _calculate_overprediction(self, X, y):
+        """Calculate the overprediction when ignoring bias compared to the true outcomes
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The trainset from which to calculate what the outcomes would be when
+            bias is ignored
+        y : array_like of shape (n_samples,)
+            The actual outcomes
+
+        Raises
+        ------
+        ValueError
+            When `self.correction_strategy is not in allowed list (see __init__)`
+        """
         y_pred = self._calculate_uncorrected_predictions(X)
         if self.correction_strategy == "No":
             self.overprediction_ = None
@@ -46,15 +82,27 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             ) - scipy.special.logit(y.mean(axis=0))
         else:
             msg = 'Correction strategy must be in ["No", "Additive", Multiplicative", "Logitadditive"]'
-            msg += f"not {self.correction_strategy}"
+            msg += f"not {self.correction_strategy!r}"
             raise ValueError(msg)
 
     def fit(self, X, y=None):
         """
         Fit estimator and learn how to correct for biases in two ways.
 
-        Learns which values to compute for each column that should be hidden if necessary.
+        Learns which impute_values to compute for each column that should be ignored.
         Calculates the amount of overprediction due to the fact that we impute values.
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The training input samples
+        y : array_Like of shape (n_samples,)
+            The target values (class labels in classification, real numbers in regression).
+
+        Returns
+        -------
+        self : object
+            Fitted estimator
         """
         X, y = check_X_y(X, y)
 
@@ -73,8 +121,22 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         return self
 
     def _prepare_new_dataset(self, X):
-        """
-        Impute values for sensitive attributes
+        """Impute values for sensitive attributes
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The set for which the ignored cols must be imputed
+
+        Returns
+        -------
+        array_like of same shape as input
+            The set for which cols are imputed
+
+        Raises
+        ------
+        ValueError
+            When self.ignored_cols_ is not of same length as self.impute_values_
         """
         X_new = np.array(X, dtype=np.float64)
         if len(self.ignored_cols_) != len(self.impute_values_):
@@ -86,8 +148,22 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         return X_new
 
     def _correct_predictions(self, predictions):
-        """
-        Correct predictions by subtracting or dividing the overprediction on the trainset
+        """Correct predictions by subtracting or dividing the overprediction on the trainset
+
+        Parameters
+        ----------
+        predictions : array_like of shape (n_samples,)
+            The original predictions
+
+        Returns
+        -------
+        predictions : array_like of shape (n_samples,)
+            the corrected predictions
+
+        Raises
+        ------
+        ValueError
+            When correction_strategy is invalid
         """
         if self.correction_strategy == "No":
             pass
@@ -108,9 +184,39 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
 class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
     def _calculate_uncorrected_predictions(self, X):
+        """Predict without correction for overprediction
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            input features
+
+        Returns
+        -------
+        y : array_like of shape (n_samples,)
+            Predictions
+        """
         return self.predict(X, use_correction=False)
 
     def fit(self, X, y, *args, **kwargs):
+        """
+        Fit estimator and learn how to correct for biases in two ways.
+
+        Learns which impute_values to compute for each column that should be ignored.
+        Calculates the amount of overprediction due to the fact that we impute values.
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The training input samples
+        y : array_Like of shape (n_samples,)
+            The target values (class labels in classification, real numbers in regression).
+
+        Raises
+        ------
+        TypeError
+            When base_estimator is not Regressor-like
+        """
         if not isinstance(self.estimator, RegressorMixin):
             raise TypeError(
                 "Base estimator must be subclass of RegressorMixin for: "
@@ -120,7 +226,20 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         return self
 
     def predict(self, X, y=None, use_correction=True):
-        """Predict new instances."""
+        """Predict regression target for X
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The input samples
+        use_correction : bool, optional
+            Whether to correct for overprediction, by default True
+
+        Returns
+        -------
+        y
+            The predicted values
+        """
         check_is_fitted(self)
         check_array(X)
 
@@ -139,6 +258,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
     def _more_tags(self):
+        """Scikit-learn compatibility"""
         return {
             "binary_only": True,
             "poor_score": True,
@@ -148,6 +268,25 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         }
 
     def fit(self, X, y, *args, **kwargs):
+        """
+        Fit estimator and learn how to correct for biases in two ways.
+
+        Learns which impute_values to compute for each column that should be ignored.
+        Calculates the amount of overprediction due to the fact that we impute values.
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The training input samples
+        y : array_Like of shape (n_samples,)
+            The target values (class labels in classification, real numbers in regression).
+
+        Raises
+        ------
+        TypeError
+            When base_estimator is not Classifier-like
+        """
+
         if not isinstance(self.estimator, ClassifierMixin):
             raise TypeError(
                 "Base estimator must be subclass of ClassifierMixin for: "
@@ -158,18 +297,58 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
 
     @property
     def classes_(self):
+        """Scikit-learn compatibility"""
         return self.estimator_.classes_
 
     def _calculate_uncorrected_predictions(self, X):
+        """Predict without correction for overprediction
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            input features
+
+        Returns
+        -------
+        y : array_like of shape (n_samples,)
+            Predictions
+        """
         return self.predict_proba(X, use_correction=False)
 
     def predict(self, X, y=None, use_correction=True):
-        """Predict new instances."""
+        """Predict class for X
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The input samples
+        use_correction : bool, optional
+            Whether to correct for overprediction, by default True
+
+        Returns
+        -------
+        y
+            The predicted values
+        """
         y_proba = self.predict_proba(X, y, use_correction)
         return self.classes_[np.argmax(y_proba, axis=1)]
 
     def predict_proba(self, X, y=None, use_correction=True):
-        """Predict probability for new instances."""
+        """Predict class probabilities for X
+
+        Parameters
+        ----------
+        X : array_like of shape (n_samples, n_features)
+            The input samples
+        use_correction : bool, optional
+            Whether to correct for overprediction, by default True
+
+        Returns
+        -------
+        p : ndarray of shape (n_samples, n_classes)
+            The class probabilities of the input samples. The order of the classes
+            corresponds to that in the attribute classes_.
+        """
         check_is_fitted(self)
         check_array(X)
 
