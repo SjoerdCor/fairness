@@ -35,7 +35,7 @@ def data(as_dataframe=False):
     X = np.array([[1, 2], [2, 4], [3, 6], [4, 8]])
     y = np.array([1] * 4)
     if as_dataframe:
-        X = pd.DataFrame(X)
+        X = pd.DataFrame(X, columns=["a", 0])
         y = pd.Series(y)
     return X, y
 
@@ -314,5 +314,6 @@ def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
     ib = basecls(underlyingestimator)
     with pytest.raises(TypeError):
         ib.fit(X, y)
+
 
 # Test what happens when overprediction_ goes to inf or summin or nuffin
