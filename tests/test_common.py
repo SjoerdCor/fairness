@@ -6,6 +6,7 @@ import pytest
 from sklearn.utils.estimator_checks import check_estimator
 from sklearn.base import clone as skclone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
 
 sys.path.append(r"..\..")
 sys.path.append("..")
@@ -23,14 +24,20 @@ regressor = RandomForestRegressor(random_state=42)
             skclone(clf), [0], correction_strategy="Logitadditive"
         ),
         fairestimator.IgnoringBiasClassifier(
-            skclone(clf), [0], impute_values=[1], correction_strategy="Logitadditive"
+            skclone(LogisticRegression()),
+            [0],
+            impute_values=[1],
+            correction_strategy="Logitadditive",
         ),
         fairestimator.IgnoringBiasRegressor(skclone(regressor)),
         fairestimator.IgnoringBiasRegressor(
-            skclone(regressor), [0], correction_strategy="Multiplicative"
+            skclone(LinearRegression()), [0], correction_strategy="Multiplicative"
         ),
         fairestimator.IgnoringBiasRegressor(
-            skclone(regressor), [0], correction_strategy="Additive"
+            skclone(regressor),
+            [0],
+            impute_values=[1],
+            correction_strategy="Additive",
         ),
     ],
     ids=[
