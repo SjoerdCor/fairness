@@ -198,6 +198,12 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
 
 
 class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
+    def _warn_inappropriate_correction_strategy(self):
+        if self.correction_strategy == "Logitadditive":
+            msg = f"Correction strategy is {self.correction_strategy}, which is only meant for classifiers. "
+            msg += 'Consider switching to "Additive" or "Multiplicative".'
+            warnings.warn(msg)
+
     def _calculate_uncorrected_predictions(self, X):
         """Predict without correction for overprediction
 
@@ -237,6 +243,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
                 "Base estimator must be subclass of RegressorMixin for: "
                 "IgnoringBiasRegressor. Did you mean to use IgnoringBiasClassifier?"
             )
+        self._warn_inappropriate_correction_strategy()
         super().fit(X, y, *args, **kwargs)
         return self
 
@@ -258,15 +265,11 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         check_is_fitted(self)
         check_array(X)
 
-        if use_correction and self.correction_strategy == "Logitadditive":
-            msg = f"Correction strategy is {self.correction_strategy}, which is only meant for classifiers. "
-            msg += 'Consider switching to "Additive" or "Multiplicative".'
-            warnings.warn(msg)
-
         X_new = self._prepare_new_dataset(X)
         y_pred = self.estimator_.predict(X_new)
 
         if use_correction:
+            self._warn_inappropriate_correction_strategy()
             y_pred = self._correct_predictions(y_pred)
         return y_pred
 
@@ -281,6 +284,16 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
                 "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
             },
         }
+
+    def _warn_inappropriate_correction_strategy(self):
+        if self.correction_strategy in [
+            "Additive",
+            "Multiplicative",
+        ]:
+            msg = f"Correction strategy is {self.correction_strategy}. "
+            msg += "This may lead to probabilities smaller than 0 or larger than 1. "
+            msg += 'Consider switching to "Logitadditive"'
+            warnings.warn(msg)
 
     def fit(self, X, y, *args, **kwargs):
         """
@@ -307,6 +320,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
                 "Base estimator must be subclass of ClassifierMixin for: "
                 "IgnoringBiasClassifier. Did you mean to use IgnoringBiasRegressor?"
             )
+        self._warn_inappropriate_correction_strategy()
         super().fit(X, y, *args, **kwargs)
         return self
 
@@ -367,14 +381,8 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         check_is_fitted(self)
         check_array(X)
 
-        if use_correction and self.correction_strategy in [
-            "Additive",
-            "Multiplicative",
-        ]:
-            msg = f"Correction strategy is {self.correction_strategy}. "
-            msg += "This may lead to probabilities smaller than 0 or larger than 1. "
-            msg += 'Consider switching to "Logitadditive"'
-            warnings.warn(msg)
+        if use_correction:
+            self._warn_inappropriate_correction_strategy()
 
         X_new = self._prepare_new_dataset(X)
         y_pred_proba = self.estimator_.predict_proba(X_new)

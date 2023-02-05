@@ -1,5 +1,6 @@
 """Specific tests for fairestimator"""
 import sys
+import warnings
 
 import pytest
 import numpy as np
@@ -315,6 +316,16 @@ def test_error_unequal_length_impute_ignored_cols():
     ids=["IBRegressor", "IBClassifier"],
 )
 def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
+    """Test that a TypeError is raised if the base estimator is not of the same type
+        (regressor/classifier) as the IgnoringBiasClassifier/Regressor
+
+    Parameters
+    ----------
+    basecls
+        IgnoringBiasClassifier or IgnoringBiasRegressor
+    underlyingestimator
+        Instance of the base estimator
+    """
     X, y = load_iris(return_X_y=True)
 
     ib = basecls(underlyingestimator)
@@ -322,4 +333,64 @@ def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
         ib.fit(X, y)
 
 
-# Test what happens when overprediction_ goes to inf or summin or nuffin
+@pytest.mark.parametrize(
+    ["estimator", "correction_strategy"],
+    [
+        (fairestimator.IgnoringBiasRegressor(regressor), "Logitadditive"),
+        (fairestimator.IgnoringBiasClassifier(clf), "Additive"),
+        (fairestimator.IgnoringBiasClassifier(clf), "Multiplicative"),
+    ],
+    ids=["LogitadditiveRegressor", "AdditiveClassifier", "MultiplicativeClassifier"],
+)
+def test_fit_warns_inappropriate_correction_strategy(estimator, correction_strategy):
+    """Test that fitting raises a warning if a correction strategy is used that is not
+    compatible with the base class (i.e. regression/classification)
+
+    Parameters
+    ----------
+    estimator :
+        instance of IgnoringBiasEstimator
+    correction_strategy
+        A correction strategy
+    """
+    X, y = data()
+
+    estimator.set_params(**{"correction_strategy": correction_strategy})
+    with pytest.warns(UserWarning):
+        estimator.fit(X, y)
+
+
+@pytest.mark.parametrize(
+    ["estimator", "correction_strategy"],
+    [
+        (fairestimator.IgnoringBiasRegressor(regressor), "Logitadditive"),
+        (fairestimator.IgnoringBiasClassifier(clf), "Additive"),
+        (fairestimator.IgnoringBiasClassifier(clf), "Multiplicative"),
+    ],
+    ids=["LogitadditiveRegressor", "AdditiveClassifier", "MultiplicativeClassifier"],
+)
+def test_predict_warns_inappropriate_correction_strategy(
+    estimator, correction_strategy
+):
+    """Test that prediction does warn if a correction strategy is used that is not
+    compatible with the base class (i.e. regression/classification), but does not warn
+    when the correction is not used in prediction
+
+    Parameters
+    ----------
+    estimator :
+        instance of IgnoringBiasEstimator
+    correction_strategy
+        A correction strategy
+    """
+    X, y = data()
+
+    estimator.set_params(**{"correction_strategy": correction_strategy})
+
+    estimator.fit(X, y)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        estimator.predict(X, use_correction=False)
+
+    with pytest.warns(UserWarning):
+        estimator.predict(X, use_correction=True)
