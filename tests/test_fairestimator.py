@@ -62,6 +62,25 @@ def test_determine_cols_to_correct(as_dataframe, ignored_cols, expected):
 
 @pytest.mark.parametrize("as_dataframe", [False, True], ids=["array", "dataframe"])
 @pytest.mark.parametrize(
+    ["ignored_cols", "error_type"],
+    [
+        ([1000], IndexError),
+        ([0.5], IndexError),
+        (["hallo"], IndexError),
+        (0, TypeError),
+    ],
+    ids=["OutOfRangeIndex", "Float", "Str", "NoList"],
+)
+def test_fit_error_invalid_ignored_cols(as_dataframe, ignored_cols, error_type):
+    """Test fit throws an IndexError with invalid `ignored_cols`"""
+    X, y = data(as_dataframe)
+    ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=ignored_cols)
+    with pytest.raises(error_type):
+        ib.fit(X, y)
+
+
+@pytest.mark.parametrize("as_dataframe", [False, True], ids=["array", "dataframe"])
+@pytest.mark.parametrize(
     ["impute_values", "expected"],
     [
         ([2.5], [[2.5, 2], [2.5, 4], [2.5, 6], [2.5, 8]]),
@@ -284,19 +303,6 @@ def test_error_unequal_length_impute_ignored_cols():
         clf, ignored_cols=[0, 1], impute_values=[1]
     )
     with pytest.raises(ValueError):
-        ib.fit(X, y)
-
-
-@pytest.mark.parametrize(
-    ["ignored_cols"],
-    [[1000], [0.5], ["hallo"]],
-    ids=["TooHigh", "Float", "Str"],
-)
-def test_fit_error_invalid_ignored_cols(ignored_cols):
-    """Test fit throws an IndexError when the index is larger than #columns of the DataFrame"""
-    X, y = load_iris(return_X_y=True)
-    ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=ignored_cols)
-    with pytest.raises(IndexError):
         ib.fit(X, y)
 
 

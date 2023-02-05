@@ -103,12 +103,27 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         -------
         self : object
             Fitted estimator
+
+        Raises
+        ------
+        ValueError
+            When `self.correction_strategy is not in allowed list (see __init__)`
+        TypeError
+            When self.ignored_cols is not Iterable
+        IndexError
+            When one of ignored_cols is not a valid index
         """
         X, y = check_X_y(X, y)
 
         self.ignored_cols_ = copy.copy(self.ignored_cols)
-        self.ignored_cols_ = self.ignored_cols_ or []
-
+        if self.ignored_cols_ is None:
+            self.ignored_cols_ = []
+        try:
+            iter(self.ignored_cols_)
+        except TypeError:
+            raise TypeError(
+                f"self.ignored_cols must be iterable, not {self.ignored_cols_}"
+            )
         self.estimator_ = clone(self.estimator)
         self.estimator_.fit(X, y)
         self.impute_values_ = copy.copy(self.impute_values)
