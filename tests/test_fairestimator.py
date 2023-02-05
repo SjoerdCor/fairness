@@ -287,10 +287,15 @@ def test_error_unequal_length_impute_ignored_cols():
         ib.fit(X, y)
 
 
-def test_error_too_high_index_ignored_col():
+@pytest.mark.parametrize(
+    ["ignored_cols"],
+    [[1000], [0.5], ["hallo"]],
+    ids=["TooHigh", "Float", "Str"],
+)
+def test_fit_error_invalid_ignored_cols(ignored_cols):
     """Test fit throws an IndexError when the index is larger than #columns of the DataFrame"""
     X, y = load_iris(return_X_y=True)
-    ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=[1000])
+    ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=ignored_cols)
     with pytest.raises(IndexError):
         ib.fit(X, y)
 
@@ -309,3 +314,5 @@ def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
     ib = basecls(underlyingestimator)
     with pytest.raises(TypeError):
         ib.fit(X, y)
+
+# Test what happens when overprediction_ goes to inf or summin or nuffin
