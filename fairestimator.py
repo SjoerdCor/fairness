@@ -276,17 +276,19 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
     def _more_tags(self):
-        """Necessary for scikit-learn compatibility
+        """Necessary for scikit-learn compatibility"""
 
-        Unfortunately we must declare this classwide, and not only for estimators that
-        actually ignore columns
-        """
-        return {
-            "poor_score": True,
-            "_xfail_checks": {
-                "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
-            },
-        }
+        # Ignoring columns can perform quite badly on datasets with very few features
+        # It is a bit ugly that we must do test configuration here, but it is the only
+        # way that works
+        if self.ignored_cols != []:
+            return {
+                "poor_score": True,
+                "_xfail_checks": {
+                    "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
+                },
+            }
+        return {}
 
     def _warn_inappropriate_correction_strategy(self):
         if self.correction_strategy in [
