@@ -1,3 +1,4 @@
+"""Specific tests for fairestimator"""
 import sys
 
 import pytest
@@ -13,9 +14,6 @@ from sklearn.datasets import load_iris, load_diabetes
 sys.path.append(r"..\..")
 sys.path.append("..")
 from fairness import fairestimator
-import importlib
-
-importlib.reload(fairestimator)
 
 clf = RandomForestClassifier(min_samples_leaf=1, max_depth=3, random_state=42)
 regressor = RandomForestRegressor(min_samples_leaf=1, max_depth=3, random_state=42)
@@ -160,6 +158,7 @@ def test_ignoring_nothing_doesnt_change_predict(estimator, datasetfunc):
 
 
 def test_calculate_correct_overprediction_without_strategy():
+    """Test whether overprediction is indeed None if correction_strategy == "No"""
     ib = fairestimator.IgnoringBiasClassifier(
         skclone(clf), ignored_cols=[0], correction_strategy="No"
     )
@@ -176,6 +175,21 @@ def test_calculate_correct_overprediction_without_strategy():
     ids=["Additive", "Multiplicative"],
 )
 def test_calculate_correct_overprediction_regression(correction_strategy, expected):
+    """Test whether the correct overprediction is calculated during regression fit
+
+    Expected overprediction is easy to calculate, by fitting a simple linear regression
+    through two points, and then setting the impute_value to the last one: then the
+    predicted must the value of y at the last point (i.e. 2), and the
+    and the average value of the set is also easy, since it is only twopoints, so it
+    must be (1.5).
+
+    Parameters
+    ----------
+    correction_strategy : str
+        All correction strategies allowed by IgnoringBiasRegressor
+    expected : np.float
+        The expected value for overprediction_
+    """
     X = [[0], [1]]
     y = [1, 2]
     ib = fairestimator.IgnoringBiasRegressor(
@@ -189,6 +203,7 @@ def test_calculate_correct_overprediction_regression(correction_strategy, expect
 
 
 def test_calculate_correct_overprediction_classification():
+    """Test whether Logitadditive gives correct overprediction"""
     X = [[0], [1]]
     y = [0, 1]
     lr = LogisticRegression(penalty=None)
@@ -211,6 +226,16 @@ def test_calculate_correct_overprediction_classification():
     [("Multiplicative", [0.5, 0.5]), ("Additive", [-1, -1])],
 )
 def test_use_regression_correction_strategy_correctly(correction_strategy, expected):
+    """Test whether overprediction is used correctly by IgnoringBiasRegressor
+
+    Parameters
+    ----------
+    correction_strategy : str
+        All allowed correction strategies for IgnoringBiasRegressor
+    expected : Iterable
+        The expected output of predict when the actual predicted values are [1, 1], and
+        the overprediction is 2
+    """
     X = [[0], [1]]
     y = [1, 1]
     lr = LinearRegression()
@@ -225,6 +250,8 @@ def test_use_regression_correction_strategy_correctly(correction_strategy, expec
 
 
 def test_use_logitadditive_correction_strategy_correctly():
+    """Test that logitadditive gives [0, 0] and [1, 1] for extreme values of
+    overprediction_"""
     X = [[0], [1]]
     y = [0, 1]
     lr = LogisticRegression(penalty=None)
@@ -243,6 +270,7 @@ def test_use_logitadditive_correction_strategy_correctly():
 
 
 def test_error_nonexistent_correction_strategy():
+    """Test fit throws an error for not allowed correction_strategy"""
     X, y = load_iris(return_X_y=True)
     ib = fairestimator.IgnoringBiasClassifier(clf, correction_strategy="DoesNotExist")
     with pytest.raises(ValueError):
@@ -250,6 +278,7 @@ def test_error_nonexistent_correction_strategy():
 
 
 def test_error_unequal_length_impute_ignored_cols():
+    """Test fit throws a ValueError when ignored_cols is not of same length as impute_values"""
     X, y = load_iris(return_X_y=True)
     ib = fairestimator.IgnoringBiasClassifier(
         clf, ignored_cols=[0, 1], impute_values=[1]
@@ -259,6 +288,7 @@ def test_error_unequal_length_impute_ignored_cols():
 
 
 def test_error_too_high_index_ignored_col():
+    """Test fit throws an IndexError when the index is larger than #columns of the DataFrame"""
     X, y = load_iris(return_X_y=True)
     ib = fairestimator.IgnoringBiasClassifier(clf, ignored_cols=[1000])
     with pytest.raises(IndexError):

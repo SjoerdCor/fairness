@@ -1,3 +1,4 @@
+""" General tests for sklearn estimators"""
 import sys
 
 import pytest
@@ -30,4 +31,5 @@ regressor = RandomForestRegressor(min_samples_leaf=10, max_depth=3, random_state
     ],
 )
 def test_all_estimators(estimator):
+    """Test sklearn compatibility"""
     return check_estimator(estimator)
