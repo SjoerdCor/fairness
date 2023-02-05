@@ -240,7 +240,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         super().fit(X, y, *args, **kwargs)
         return self
 
-    def predict(self, X, y=None, use_correction=True):
+    def predict(self, X, use_correction=True):
         """Predict regression target for X
 
         Parameters
@@ -330,7 +330,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         """
         return self.predict_proba(X, use_correction=False)
 
-    def predict(self, X, y=None, use_correction=True):
+    def predict(self, X, use_correction=True):
         """Predict class for X
 
         Parameters
@@ -345,10 +345,10 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         y
             The predicted values
         """
-        y_proba = self.predict_proba(X, y, use_correction)
+        y_proba = self.predict_proba(X, use_correction)
         return self.classes_[np.argmax(y_proba, axis=1)]
 
-    def predict_proba(self, X, y=None, use_correction=True):
+    def predict_proba(self, X, use_correction=True):
         """Predict class probabilities for X
 
         Parameters
