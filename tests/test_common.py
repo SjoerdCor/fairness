@@ -11,17 +11,17 @@ sys.path.append(r"..\..")
 sys.path.append("..")
 from fairness import fairestimator
 
-clf = RandomForestClassifier(min_samples_leaf=10, max_depth=3, random_state=42)
-regressor = RandomForestRegressor(min_samples_leaf=10, max_depth=3, random_state=42)
+clf = RandomForestClassifier(random_state=42)
+regressor = RandomForestRegressor(random_state=42)
 
 
 @pytest.mark.parametrize(
     "estimator",
     [
         fairestimator.IgnoringBiasClassifier(skclone(clf)),
-        fairestimator.IgnoringBiasClassifier(skclone(clf), [0], impute_values=[1]),
+        fairestimator.IgnoringBiasClassifier(skclone(clf), [0]),
         fairestimator.IgnoringBiasRegressor(skclone(regressor)),
-        fairestimator.IgnoringBiasRegressor(skclone(regressor), [0], impute_values=[1]),
+        fairestimator.IgnoringBiasRegressor(skclone(regressor), [0]),
     ],
     ids=[
         "EmptyClassifier",
