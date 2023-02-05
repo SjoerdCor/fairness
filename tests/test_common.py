@@ -19,15 +19,27 @@ regressor = RandomForestRegressor(random_state=42)
     "estimator",
     [
         fairestimator.IgnoringBiasClassifier(skclone(clf)),
-        fairestimator.IgnoringBiasClassifier(skclone(clf), [0]),
+        fairestimator.IgnoringBiasClassifier(
+            skclone(clf), [0], correction_strategy="Logitadditive"
+        ),
+        fairestimator.IgnoringBiasClassifier(
+            skclone(clf), [0], impute_values=[1], correction_strategy="Logitadditive"
+        ),
         fairestimator.IgnoringBiasRegressor(skclone(regressor)),
-        fairestimator.IgnoringBiasRegressor(skclone(regressor), [0]),
+        fairestimator.IgnoringBiasRegressor(
+            skclone(regressor), [0], correction_strategy="Multiplicative"
+        ),
+        fairestimator.IgnoringBiasRegressor(
+            skclone(regressor), [0], correction_strategy="Additive"
+        ),
     ],
     ids=[
         "EmptyClassifier",
-        "IgnoringClassifier",
+        "IgnoringClassifierLogitAdditive",
+        "IgnoringClassifierFixedImputation",
         "EmptyRegressor",
-        "IgnoringRegressor",
+        "IgnoringRegressorMultiplicative",
+        "IgnoringRegressorAdditive",
     ],
 )
 def test_all_estimators(estimator):
