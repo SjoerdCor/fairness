@@ -146,20 +146,20 @@ def test_calculate_correct_mean_for_imputation(as_dataframe, ignored_cols, expec
 
 
 @pytest.mark.parametrize(
-    ["estimator", "datasetfunc"],
+    ["estimator", "dataset"],
     [
         (
             fairestimator.IgnoringBiasRegressor(skclone(regressor), ignored_cols=None),
-            load_diabetes,
+            load_diabetes(return_X_y=True),
         ),
         (
             fairestimator.IgnoringBiasClassifier(skclone(clf), ignored_cols=None),
-            load_iris,
+            data(),
         ),
     ],
     ids=["Regressor", "Classifier"],
 )
-def test_ignoring_nothing_doesnt_change_predict(estimator, datasetfunc):
+def test_ignoring_nothing_doesnt_change_predict(estimator, dataset):
     """Test whether setting ignored_cols to None leads to the same results for
     prediction as the underlying estimaotr
 
@@ -171,7 +171,7 @@ def test_ignoring_nothing_doesnt_change_predict(estimator, datasetfunc):
     datasetfunc : callable
         An sklearn function to load the dataset
     """
-    X, y = datasetfunc(return_X_y=True)
+    X, y = dataset
     estimator.fit(X, y)
     underlying_estimator = skclone(estimator.estimator_).fit(X, y)
     assert np.array_equal(estimator.predict(X), underlying_estimator.predict(X))
@@ -291,7 +291,7 @@ def test_use_logitadditive_correction_strategy_correctly():
 
 def test_error_nonexistent_correction_strategy():
     """Test fit throws an error for not allowed correction_strategy"""
-    X, y = load_iris(return_X_y=True)
+    X, y = data()
     ib = fairestimator.IgnoringBiasClassifier(clf, correction_strategy="DoesNotExist")
     with pytest.raises(ValueError):
         ib.fit(X, y)
@@ -299,7 +299,7 @@ def test_error_nonexistent_correction_strategy():
 
 def test_error_unequal_length_impute_ignored_cols():
     """Test fit throws a ValueError when ignored_cols is not of same length as impute_values"""
-    X, y = load_iris(return_X_y=True)
+    X, y = data()
     ib = fairestimator.IgnoringBiasClassifier(
         clf, ignored_cols=[0, 1], impute_values=[1]
     )
@@ -326,7 +326,7 @@ def test_error_wrong_type_base_estimator(basecls, underlyingestimator):
     underlyingestimator
         Instance of the base estimator
     """
-    X, y = load_iris(return_X_y=True)
+    X, y = data()
 
     ib = basecls(underlyingestimator)
     with pytest.raises(TypeError):

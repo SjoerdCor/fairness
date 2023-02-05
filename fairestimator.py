@@ -48,6 +48,18 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         self.impute_values = impute_values
         self.correction_strategy = correction_strategy
 
+    def _more_tags(self):
+        """Necessary for scikit-learn compatibility
+
+        This is used in many unit tests. Since `check_estimator` clones the estimator,
+        this has to be a class method, and cannot be set to specific instances. It is
+        unfortunate we have to test configuration here, but that's how it works.
+        """
+        if self.ignored_cols:
+            # Some test sets have very few columns. Ignoring one can have a big impact
+            return {"poor_score": True}
+        return {}
+
     @property
     def n_features_in_(self):
         """Necessary for scikit-learn compatibility"""
@@ -69,17 +81,21 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         ValueError
             When `self.correction_strategy is not in allowed list (see __init__)`
         """
-        y_pred = self._calculate_uncorrected_predictions(X)
         if self.correction_strategy == "No":
             self.overprediction_ = None
-        elif self.correction_strategy == "Additive":
-            self.overprediction_ = y_pred.mean() - y.mean()
+            return
+
+        y_pred_mean = self._calculate_uncorrected_predictions_mean(X)
+        y_true_mean = self._calculate_true_mean(y)
+
+        if self.correction_strategy == "Additive":
+            self.overprediction_ = y_pred_mean - y_true_mean
         elif self.correction_strategy == "Multiplicative":
-            self.overprediction_ = y_pred.mean() / y.mean()
+            self.overprediction_ = y_pred_mean / y_true_mean
         elif self.correction_strategy == "Logitadditive":
             self.overprediction_ = scipy.special.logit(
-                y_pred.mean(axis=0)
-            ) - scipy.special.logit(y.mean(axis=0))
+                y_pred_mean
+            ) - scipy.special.logit(y_true_mean)
         else:
             msg = 'Correction strategy must be in ["No", "Additive", Multiplicative", "Logitadditive"]'
             msg += f"not {self.correction_strategy!r}"
@@ -108,6 +124,7 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
         ------
         ValueError
             When `self.correction_strategy is not in allowed list (see __init__)`
+            When impute_values is not of same length as ignored_cols
         TypeError
             When self.ignored_cols is not Iterable
         IndexError
@@ -124,6 +141,14 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             raise TypeError(
                 f"self.ignored_cols must be iterable, not {self.ignored_cols_}"
             )
+
+        if self.impute_values is not None and (
+            len(self.ignored_cols) != len(self.impute_values)
+        ):
+            raise ValueError(
+                "self.ignored_cols and self.impute_values must be of equal length."
+            )
+
         self.estimator_ = clone(self.estimator)
         self.estimator_.fit(X, y)
         self.impute_values_ = copy.copy(self.impute_values)
@@ -132,6 +157,7 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
                 self.impute_values_ = [X.iloc[:, i].mean() for i in self.ignored_cols_]
             else:
                 self.impute_values_ = X[:, self.ignored_cols_].mean(axis=0)
+
         self._calculate_overprediction(X, y)
         return self
 
@@ -154,10 +180,6 @@ class BaseIgnoringBiasEstimator(BaseEstimator):
             When self.ignored_cols_ is not of same length as self.impute_values_
         """
         X_new = np.array(X, dtype=np.float64)
-        if len(self.ignored_cols_) != len(self.impute_values_):
-            raise ValueError(
-                "self.ignored_cols and self.impute_values must be of same length."
-            )
         for i, v in zip(self.ignored_cols_, self.impute_values_):
             X_new[:, i] = v
         return X_new
@@ -204,7 +226,7 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
             msg += 'Consider switching to "Additive" or "Multiplicative".'
             warnings.warn(msg)
 
-    def _calculate_uncorrected_predictions(self, X):
+    def _calculate_uncorrected_predictions_mean(self, X):
         """Predict without correction for overprediction
 
         Parameters
@@ -217,7 +239,24 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
         y : array_like of shape (n_samples,)
             Predictions
         """
-        return self.predict(X, use_correction=False)
+        return self.predict(X, use_correction=False).mean()
+
+    def _calculate_true_mean(self, y):
+        """Calculate the average true outcome
+
+        Used in calculating the overprediction
+
+        Parameters
+        ----------
+        y : array_like 
+            The true outcomes
+
+        Returns
+        -------
+        y_mean: array_like of shape (1,)
+            The average value of y
+        """
+        return y.mean()
 
     def fit(self, X, y, *args, **kwargs):
         """
@@ -276,19 +315,16 @@ class IgnoringBiasRegressor(BaseIgnoringBiasEstimator, RegressorMixin):
 
 class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
     def _more_tags(self):
-        """Necessary for scikit-learn compatibility"""
+        """Necessary for scikit-learn compatibility
 
-        # Ignoring columns can perform quite badly on datasets with very few features
-        # It is a bit ugly that we must do test configuration here, but it is the only
-        # way that works
-        if self.ignored_cols != []:
-            return {
-                "poor_score": True,
-                "_xfail_checks": {
-                    "check_classifiers_classes": "Skipped because for ignoring columns, you do not always predict all different classes"
-                },
-            }
-        return {}
+        This is used in many unit tests. Since `check_estimator` clones the estimator,
+        this has to be a class method, and cannot be set to specific instances. It is
+        unfortunate we have to test configuration here, but that's how it works.
+        """
+        specifics = {}
+        specifics["binary_only"] = True
+        base = super()._more_tags()
+        return {**base, **specifics}
 
     def _warn_inappropriate_correction_strategy(self):
         if self.correction_strategy in [
@@ -318,6 +354,8 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         ------
         TypeError
             When base_estimator is not Classifier-like
+        ValueError
+            When multiclass is determined
         """
 
         if not isinstance(self.estimator, ClassifierMixin):
@@ -327,6 +365,13 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
             )
         self._warn_inappropriate_correction_strategy()
         super().fit(X, y, *args, **kwargs)
+        if len(self.classes_) > 2:
+            msg = (
+                "IgnoringBiasClassifier does not work for multiclass... yet! This can "
+                "result in erroneous probabilities and predictions. However, please do"
+                " contact the maintainers, who would love to solve this with you!"
+            )
+            raise NotImplementedError(msg)
         return self
 
     @property
@@ -334,7 +379,7 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         """Scikit-learn compatibility"""
         return self.estimator_.classes_
 
-    def _calculate_uncorrected_predictions(self, X):
+    def _calculate_uncorrected_predictions_mean(self, X):
         """Predict without correction for overprediction
 
         Parameters
@@ -347,7 +392,22 @@ class IgnoringBiasClassifier(BaseIgnoringBiasEstimator, ClassifierMixin):
         y : array_like of shape (n_samples,)
             Predictions
         """
-        return self.predict_proba(X, use_correction=False)
+        return self.predict_proba(X, use_correction=False).mean(axis=0)
+
+    def _calculate_true_mean(self, y):
+        """Calculate the average probability of each class
+
+        Parameters
+        ----------
+        y : array_like of shape (n_samples,)
+            True outcomes
+
+        Returns
+        -------
+        p_avg : array_like of shape (n_classes,)
+            The average probability of getting each class
+        """
+        return np.array([y == c for c in self.classes_]).mean(axis=1)
 
     def predict(self, X, use_correction=True):
         """Predict class for X
